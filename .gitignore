@@ -11,3 +11,4 @@ staticfiles/
 .env
 .repo-git/
 .git.locked-placeholder/
+ProjectContext/
