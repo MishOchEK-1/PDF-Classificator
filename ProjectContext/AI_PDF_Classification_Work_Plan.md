@@ -12,7 +12,8 @@
   - local git history initialized for this project;
   - remote `origin` configured for `https://github.com/MishOchEK-1/PDF-Classificator.git`;
   - initial foundation commit created: `802842b`;
-  - GitHub push is pending repository authentication in the current environment.
+  - push attempt with provided GitHub token reached the remote but failed with `403 Permission denied`;
+  - publishing is pending a token with confirmed write access to `MishOchEK-1/PDF-Classificator`.
 - Stage 1 verified on 2026-05-30:
   - architecture, structure, and API contract checked against the current codebase;
   - synchronous MVP flow confirmed: `POST /api/classify/` returns the classification result directly;
