@@ -1,0 +1,128 @@
+:root {
+  --bg: #f4f1e8;
+  --panel: rgba(255, 252, 245, 0.9);
+  --ink: #1f2a2a;
+  --muted: #5f6b66;
+  --accent: #1d6b52;
+  --accent-strong: #144938;
+  --line: rgba(31, 42, 42, 0.12);
+  --shadow: 0 24px 70px rgba(20, 30, 28, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(29, 107, 82, 0.22), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(175, 109, 62, 0.18), transparent 24%),
+    linear-gradient(180deg, #f8f5ee 0%, var(--bg) 100%);
+}
+
+.shell {
+  width: min(920px, calc(100% - 32px));
+  margin: 48px auto;
+}
+
+.hero {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 12ch;
+  font-size: clamp(2.6rem, 6vw, 5rem);
+  line-height: 0.95;
+}
+
+.lead {
+  max-width: 56ch;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.panel {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+}
+
+.upload-form {
+  display: grid;
+  gap: 16px;
+}
+
+.upload-field {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed rgba(29, 107, 82, 0.35);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.upload-field span {
+  font-weight: 600;
+}
+
+button {
+  width: fit-content;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+button:hover {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.status {
+  margin-top: 18px;
+  color: var(--muted);
+}
+
+.result-card {
+  overflow-x: auto;
+  margin: 20px 0 0;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: #1d2523;
+  color: #f4f1e8;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    width: min(100% - 20px, 920px);
+    margin: 20px auto 32px;
+  }
+
+  .panel {
+    padding: 20px;
+  }
+}

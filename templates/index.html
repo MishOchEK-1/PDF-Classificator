@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Classification</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">AI PDF Classification System</p>
+        <h1>Upload a PDF and inspect the classification result locally.</h1>
+        <p class="lead">
+          The UI is intentionally simple: plain HTML, CSS, and JavaScript served
+          by Django.
+        </p>
+      </section>
+
+      <section class="panel">
+        <form id="classify-form" class="upload-form">
+          <label class="upload-field" for="pdf-file">
+            <span>Select a PDF document</span>
+            <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required />
+          </label>
+          <button type="submit">Classify Document</button>
+        </form>
+
+        <div id="status" class="status" aria-live="polite">
+          Backend scaffold is ready. The classification pipeline is still under construction.
+        </div>
+
+        <pre id="result" class="result-card">
+{
+  "class": "technical_documentation",
+  "tags": ["python", "backend", "api"],
+  "confidence": 0.92
+}
+        </pre>
+      </section>
+    </main>
+
+    <script src="{% static 'js/app.js' %}"></script>
+  </body>
+</html>
