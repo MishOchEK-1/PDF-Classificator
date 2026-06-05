@@ -1,9 +1,21 @@
+import json
+import socket
+from unittest import mock
+import urllib.error
+
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 import fitz
 
+from backend.llm.ollama_client import (
+    OllamaClient,
+    OllamaClientError,
+    OllamaResponseError,
+    OllamaTimeoutError,
+    OllamaUnavailableError,
+)
 from backend.prompts.classification import ALLOWED_DOCUMENT_CLASSES, build_classification_prompt
 from backend.prompts.validation import (
     PromptResponseValidationError,
@@ -133,3 +145,130 @@ class PromptEngineeringTests(SimpleTestCase):
             validate_classification_response(
                 '{"class":"invoice","tags":["Billing!"],"confidence":0.7}'
             )
+
+
+class OllamaClientTests(SimpleTestCase):
+    def test_send_prompt_posts_to_ollama_generate_endpoint(self):
+        client = OllamaClient(
+            base_url='http://localhost:11434',
+            model='gemma3:4b',
+            timeout_seconds=5,
+            max_retries=0,
+        )
+
+        mocked_response = mock.MagicMock()
+        mocked_response.read.return_value = json.dumps({'response': '{"class":"report"}'}).encode('utf-8')
+        mocked_context = mock.MagicMock()
+        mocked_context.__enter__.return_value = mocked_response
+        mocked_context.__exit__.return_value = False
+
+        with mock.patch('urllib.request.urlopen', return_value=mocked_context) as urlopen_mock:
+            payload = client.send_prompt('Classify this document')
+
+        request = urlopen_mock.call_args.args[0]
+        body = json.loads(request.data.decode('utf-8'))
+
+        self.assertEqual(request.full_url, 'http://localhost:11434/api/generate')
+        self.assertEqual(body['model'], 'gemma3:4b')
+        self.assertEqual(body['prompt'], 'Classify this document')
+        self.assertFalse(body['stream'])
+        self.assertEqual(payload['response'], '{"class":"report"}')
+
+    def test_parse_response_accepts_generate_api_shape(self):
+        client = OllamaClient()
+
+        response_text = client.parse_response({'response': '{"class":"invoice"}'})
+
+        self.assertEqual(response_text, '{"class":"invoice"}')
+
+    def test_parse_response_accepts_chat_api_shape(self):
+        client = OllamaClient()
+
+        response_text = client.parse_response({'message': {'content': '{"class":"resume"}'}})
+
+        self.assertEqual(response_text, '{"class":"resume"}')
+
+    def test_parse_response_rejects_invalid_shape(self):
+        client = OllamaClient()
+
+        with self.assertRaises(OllamaResponseError):
+            client.parse_response({'done': True})
+
+    def test_send_prompt_retries_timeout_then_succeeds(self):
+        client = OllamaClient(
+            base_url='http://localhost:11434',
+            model='gemma3:4b',
+            timeout_seconds=1,
+            max_retries=1,
+            retry_delay_seconds=0,
+        )
+
+        mocked_response = mock.MagicMock()
+        mocked_response.read.return_value = json.dumps({'response': '{"class":"report"}'}).encode('utf-8')
+        mocked_context = mock.MagicMock()
+        mocked_context.__enter__.return_value = mocked_response
+        mocked_context.__exit__.return_value = False
+
+        with mock.patch(
+            'urllib.request.urlopen',
+            side_effect=[socket.timeout(), mocked_context],
+        ) as urlopen_mock:
+            payload = client.send_prompt('Retry this prompt')
+
+        self.assertEqual(urlopen_mock.call_count, 2)
+        self.assertEqual(payload['response'], '{"class":"report"}')
+
+    def test_send_prompt_raises_timeout_after_retries(self):
+        client = OllamaClient(
+            base_url='http://localhost:11434',
+            model='gemma3:4b',
+            timeout_seconds=1,
+            max_retries=1,
+            retry_delay_seconds=0,
+        )
+
+        with mock.patch('urllib.request.urlopen', side_effect=socket.timeout()):
+            with self.assertRaises(OllamaTimeoutError):
+                client.send_prompt('This request will time out')
+
+    def test_send_prompt_raises_unavailable_for_missing_model(self):
+        client = OllamaClient(
+            base_url='http://localhost:11434',
+            model='missing-model',
+            timeout_seconds=1,
+            max_retries=0,
+        )
+
+        http_error = urllib.error.HTTPError(
+            url='http://localhost:11434/api/generate',
+            code=404,
+            msg='Not Found',
+            hdrs=None,
+            fp=None,
+        )
+        http_error.read = lambda: b'model not found'
+
+        with mock.patch('urllib.request.urlopen', side_effect=http_error):
+            with self.assertRaises(OllamaUnavailableError):
+                client.send_prompt('Missing model prompt')
+
+    def test_send_prompt_raises_generic_client_error_for_http_500(self):
+        client = OllamaClient(
+            base_url='http://localhost:11434',
+            model='gemma3:4b',
+            timeout_seconds=1,
+            max_retries=0,
+        )
+
+        http_error = urllib.error.HTTPError(
+            url='http://localhost:11434/api/generate',
+            code=500,
+            msg='Server Error',
+            hdrs=None,
+            fp=None,
+        )
+        http_error.read = lambda: b'internal error'
+
+        with mock.patch('urllib.request.urlopen', side_effect=http_error):
+            with self.assertRaises(OllamaClientError):
+                client.send_prompt('Server error prompt')
