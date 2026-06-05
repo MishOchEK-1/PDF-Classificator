@@ -1,8 +1,14 @@
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 import fitz
+
+from backend.prompts.classification import ALLOWED_DOCUMENT_CLASSES, build_classification_prompt
+from backend.prompts.validation import (
+    PromptResponseValidationError,
+    validate_classification_response,
+)
 
 
 def build_pdf_bytes(text: str | None = None) -> bytes:
@@ -84,3 +90,46 @@ class ApiSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn('maximum allowed size', response.json()['file'][0])
+
+
+class PromptEngineeringTests(SimpleTestCase):
+    def test_prompt_contains_text_classes_and_json_only_instructions(self):
+        prompt = build_classification_prompt('Sample invoice text')
+
+        self.assertIn('Sample invoice text', prompt)
+        self.assertIn('Return JSON only.', prompt)
+        self.assertIn('Do not include markdown.', prompt)
+
+        for document_class in ALLOWED_DOCUMENT_CLASSES:
+            self.assertIn(document_class, prompt)
+
+    def test_response_validation_accepts_valid_payload(self):
+        result = validate_classification_response(
+            '{"class":"invoice","tags":["billing","accounts_payable"],"confidence":0.88}'
+        )
+
+        self.assertEqual(result.document_class, 'invoice')
+        self.assertEqual(result.tags, ['billing', 'accounts_payable'])
+        self.assertEqual(result.confidence, 0.88)
+
+    def test_response_validation_rejects_markdown_fenced_json(self):
+        with self.assertRaises(PromptResponseValidationError):
+            validate_classification_response(
+                '```json\n{"class":"invoice","tags":["billing"],"confidence":0.8}\n```'
+            )
+
+    def test_response_validation_rejects_missing_fields(self):
+        with self.assertRaises(PromptResponseValidationError):
+            validate_classification_response('{"class":"invoice","confidence":0.8}')
+
+    def test_response_validation_rejects_invalid_confidence(self):
+        with self.assertRaises(PromptResponseValidationError):
+            validate_classification_response(
+                '{"class":"invoice","tags":["billing"],"confidence":1.2}'
+            )
+
+    def test_response_validation_rejects_invalid_tag_format(self):
+        with self.assertRaises(PromptResponseValidationError):
+            validate_classification_response(
+                '{"class":"invoice","tags":["Billing!"],"confidence":0.7}'
+            )
