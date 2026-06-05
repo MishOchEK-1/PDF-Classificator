@@ -16,10 +16,17 @@ from backend.llm.ollama_client import (
     OllamaTimeoutError,
     OllamaUnavailableError,
 )
+from backend.models.schemas import ClassificationSchema
 from backend.prompts.classification import ALLOWED_DOCUMENT_CLASSES, build_classification_prompt
 from backend.prompts.validation import (
     PromptResponseValidationError,
     validate_classification_response,
+)
+from backend.services.classification_service import (
+    ClassificationResponseAPIError,
+    ClassificationService,
+    ClassificationTimeoutAPIError,
+    ClassificationUnavailableAPIError,
 )
 
 
@@ -56,10 +63,25 @@ class ApiSmokeTests(TestCase):
             content_type='application/pdf',
         )
 
-        response = self.client.post(reverse('api:classify'), {'file': pdf})
+        with mock.patch(
+            'backend.api.views.ClassifyDocumentView.classification_service.classify',
+            return_value=ClassificationSchema(
+                document_class='technical_documentation',
+                tags=['python', 'backend', 'api'],
+                confidence=0.92,
+            ),
+        ):
+            response = self.client.post(reverse('api:classify'), {'file': pdf})
 
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.json()['detail'], 'Classification pipeline is not implemented yet.')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                'class': 'technical_documentation',
+                'tags': ['python', 'backend', 'api'],
+                'confidence': 0.92,
+            },
+        )
 
     def test_classify_endpoint_requires_file(self):
         response = self.client.post(reverse('api:classify'), {})
@@ -272,3 +294,70 @@ class OllamaClientTests(SimpleTestCase):
         with mock.patch('urllib.request.urlopen', side_effect=http_error):
             with self.assertRaises(OllamaClientError):
                 client.send_prompt('Server error prompt')
+
+
+class ClassificationServiceTests(SimpleTestCase):
+    def test_classification_service_runs_full_pipeline(self):
+        pdf_processing_service = mock.Mock()
+        pdf_processing_service.process_upload.return_value = mock.Mock(
+            cleaned_text='Invoice total due and payment instructions',
+        )
+        ollama_client = mock.Mock()
+        ollama_client.classify.return_value = (
+            '{"class":"invoice","tags":["billing","payment"],"confidence":0.91}'
+        )
+
+        service = ClassificationService(
+            pdf_processing_service=pdf_processing_service,
+            ollama_client=ollama_client,
+        )
+
+        result = service.classify(mock.sentinel.pdf_file)
+
+        pdf_processing_service.process_upload.assert_called_once_with(mock.sentinel.pdf_file)
+        ollama_client.classify.assert_called_once()
+        self.assertEqual(result.document_class, 'invoice')
+        self.assertEqual(result.tags, ['billing', 'payment'])
+        self.assertEqual(result.confidence, 0.91)
+
+    def test_classification_service_translates_timeout_errors(self):
+        pdf_processing_service = mock.Mock()
+        pdf_processing_service.process_upload.return_value = mock.Mock(cleaned_text='Resume text')
+        ollama_client = mock.Mock()
+        ollama_client.classify.side_effect = OllamaTimeoutError('timeout')
+
+        service = ClassificationService(
+            pdf_processing_service=pdf_processing_service,
+            ollama_client=ollama_client,
+        )
+
+        with self.assertRaises(ClassificationTimeoutAPIError):
+            service.classify(mock.sentinel.pdf_file)
+
+    def test_classification_service_translates_unavailable_errors(self):
+        pdf_processing_service = mock.Mock()
+        pdf_processing_service.process_upload.return_value = mock.Mock(cleaned_text='Report text')
+        ollama_client = mock.Mock()
+        ollama_client.classify.side_effect = OllamaUnavailableError('server unavailable')
+
+        service = ClassificationService(
+            pdf_processing_service=pdf_processing_service,
+            ollama_client=ollama_client,
+        )
+
+        with self.assertRaises(ClassificationUnavailableAPIError):
+            service.classify(mock.sentinel.pdf_file)
+
+    def test_classification_service_translates_invalid_model_response(self):
+        pdf_processing_service = mock.Mock()
+        pdf_processing_service.process_upload.return_value = mock.Mock(cleaned_text='Contract text')
+        ollama_client = mock.Mock()
+        ollama_client.classify.return_value = '{"class":"contract","confidence":0.9}'
+
+        service = ClassificationService(
+            pdf_processing_service=pdf_processing_service,
+            ollama_client=ollama_client,
+        )
+
+        with self.assertRaises(ClassificationResponseAPIError):
+            service.classify(mock.sentinel.pdf_file)

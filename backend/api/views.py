@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from backend.services.pdf_processing_service import PDFProcessingService
+from backend.services.classification_service import ClassificationService
 
 from .serializers import ClassifyDocumentRequestSerializer, HealthCheckSerializer
 
@@ -23,28 +23,13 @@ class HealthCheckView(APIView):
 
 
 class ClassifyDocumentView(APIView):
-    """
-    Stage 1 stub for the future document classification pipeline.
+    """Runs the current end-to-end classification pipeline for a single PDF."""
 
-    The full upload, parsing, prompt generation, and Ollama integration will
-    be implemented in later stages of the plan.
-    """
-
-    pdf_processing_service = PDFProcessingService()
+    classification_service = ClassificationService()
 
     def post(self, request):
         serializer = ClassifyDocumentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.pdf_processing_service.process_upload(serializer.validated_data['file'])
+        result = self.classification_service.classify(serializer.validated_data['file'])
 
-        return Response(
-            {
-                'detail': 'Classification pipeline is not implemented yet.',
-                'expected_response': {
-                    'class': 'technical_documentation',
-                    'tags': ['python', 'backend', 'api'],
-                    'confidence': 0.92,
-                },
-            },
-            status=status.HTTP_501_NOT_IMPLEMENTED,
-        )
+        return Response(result.to_api_payload(), status=status.HTTP_200_OK)
