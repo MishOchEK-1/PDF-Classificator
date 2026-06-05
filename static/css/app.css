@@ -100,8 +100,35 @@ button:hover {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+  transform: none;
+}
+
+.api-status {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.api-status div {
+  display: grid;
+  gap: 4px;
+}
+
+.api-status dt {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.api-status dd {
+  margin: 0;
+}
+
 .status {
-  margin-top: 18px;
   color: var(--muted);
 }
 

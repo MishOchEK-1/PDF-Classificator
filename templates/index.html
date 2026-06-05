@@ -20,6 +20,7 @@
 
       <section class="panel">
         <form id="classify-form" class="upload-form">
+          {% csrf_token %}
           <label class="upload-field" for="pdf-file">
             <span>Select a PDF document</span>
             <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required />
@@ -27,9 +28,16 @@
           <button type="submit">Classify Document</button>
         </form>
 
-        <div id="status" class="status" aria-live="polite">
-          Backend scaffold is ready. The classification pipeline is still under construction.
-        </div>
+        <dl class="api-status" aria-live="polite">
+          <div>
+            <dt>Backend</dt>
+            <dd id="backend-status">Checking connection...</dd>
+          </div>
+          <div>
+            <dt>Classification API</dt>
+            <dd id="status">Waiting for a PDF upload.</dd>
+          </div>
+        </dl>
 
         <pre id="result" class="result-card">
 {
