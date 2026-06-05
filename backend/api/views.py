@@ -3,6 +3,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from backend.services.pdf_processing_service import PDFProcessingService
+
 from .serializers import ClassifyDocumentRequestSerializer, HealthCheckSerializer
 
 
@@ -28,9 +30,12 @@ class ClassifyDocumentView(APIView):
     be implemented in later stages of the plan.
     """
 
+    pdf_processing_service = PDFProcessingService()
+
     def post(self, request):
         serializer = ClassifyDocumentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        self.pdf_processing_service.process_upload(serializer.validated_data['file'])
 
         return Response(
             {

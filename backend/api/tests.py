@@ -2,6 +2,19 @@ from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+import fitz
+
+
+def build_pdf_bytes(text: str | None = None) -> bytes:
+    document = fitz.open()
+    page = document.new_page()
+
+    if text:
+        page.insert_text((72, 72), text)
+
+    pdf_bytes = document.tobytes()
+    document.close()
+    return pdf_bytes
 
 
 class ApiSmokeTests(TestCase):
@@ -19,7 +32,11 @@ class ApiSmokeTests(TestCase):
         )
 
     def test_classify_endpoint_accepts_pdf_request_shape(self):
-        pdf = SimpleUploadedFile('sample.pdf', b'%PDF-1.4\n%%EOF', content_type='application/pdf')
+        pdf = SimpleUploadedFile(
+            'sample.pdf',
+            build_pdf_bytes('Backend architecture and API design'),
+            content_type='application/pdf',
+        )
 
         response = self.client.post(reverse('api:classify'), {'file': pdf})
 
@@ -31,3 +48,39 @@ class ApiSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn('file', response.json())
+
+    def test_classify_endpoint_rejects_non_pdf_extension(self):
+        fake_text = SimpleUploadedFile('notes.txt', b'hello', content_type='text/plain')
+
+        response = self.client.post(reverse('api:classify'), {'file': fake_text})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Only PDF files are supported.', response.json()['file'][0])
+
+    def test_classify_endpoint_rejects_blank_pdf_without_text(self):
+        pdf = SimpleUploadedFile('blank.pdf', build_pdf_bytes(), content_type='application/pdf')
+
+        response = self.client.post(reverse('api:classify'), {'file': pdf})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('no extractable text', response.json()['detail'].lower())
+
+    def test_classify_endpoint_rejects_corrupted_pdf(self):
+        corrupted_pdf = SimpleUploadedFile('broken.pdf', b'not-a-real-pdf', content_type='application/pdf')
+
+        response = self.client.post(reverse('api:classify'), {'file': corrupted_pdf})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('corrupted or unreadable', response.json()['detail'].lower())
+
+    def test_classify_endpoint_rejects_oversized_pdf(self):
+        with self.settings(MAX_UPLOAD_SIZE=10):
+            pdf = SimpleUploadedFile(
+                'large.pdf',
+                build_pdf_bytes('This content is intentionally larger than ten bytes.'),
+                content_type='application/pdf',
+            )
+            response = self.client.post(reverse('api:classify'), {'file': pdf})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('maximum allowed size', response.json()['file'][0])
