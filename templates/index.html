@@ -32,10 +32,24 @@
             <button type="submit">Classify Document</button>
             <div id="loading-indicator" class="loading-indicator" aria-live="polite" hidden>
               <span class="loading-spinner" aria-hidden="true"></span>
-              <span>Uploading PDF...</span>
+              <span id="loading-label">Uploading PDF...</span>
             </div>
           </div>
         </form>
+
+        <section id="pipeline-status" class="pipeline-status" aria-live="polite">
+          <div class="progress-row">
+            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <span id="progress-value" class="progress-value">0%</span>
+          </div>
+          <div class="stage-list">
+            <span id="stage-upload" class="stage-pill">Upload</span>
+            <span id="stage-processing" class="stage-pill">Processing</span>
+            <span id="stage-inference" class="stage-pill">Inference</span>
+          </div>
+        </section>
 
         <dl class="api-status" aria-live="polite">
           <div>
@@ -67,6 +81,7 @@
           </article>
           <article class="result-card result-card-wide">
             <p class="result-label">Errors</p>
+            <p id="result-error-type" class="result-error-type">No active error category.</p>
             <p id="result-error" class="result-error">No errors yet.</p>
           </article>
         </section>

@@ -5,13 +5,26 @@ const uploadCaptionNode = document.getElementById("upload-caption");
 const backendStatusNode = document.getElementById("backend-status");
 const statusNode = document.getElementById("status");
 const loadingIndicatorNode = document.getElementById("loading-indicator");
+const loadingLabelNode = document.getElementById("loading-label");
+const progressFillNode = document.getElementById("progress-fill");
+const progressValueNode = document.getElementById("progress-value");
 const resultClassNode = document.getElementById("result-class");
 const resultConfidenceNode = document.getElementById("result-confidence");
 const resultTagsNode = document.getElementById("result-tags");
+const resultErrorTypeNode = document.getElementById("result-error-type");
 const resultErrorNode = document.getElementById("result-error");
 const submitButton = form?.querySelector("button[type='submit']");
+const progressTrackNode = document.querySelector(".progress-track");
+
+const stageNodes = {
+  upload: document.getElementById("stage-upload"),
+  processing: document.getElementById("stage-processing"),
+  inference: document.getElementById("stage-inference"),
+};
 
 const csrfToken = form?.querySelector("input[name='csrfmiddlewaretoken']")?.value ?? "";
+
+let inferenceTimerId = null;
 
 async function loadBackendStatus() {
   if (!backendStatusNode) {
@@ -30,8 +43,6 @@ async function loadBackendStatus() {
   }
 }
 
-loadBackendStatus();
-
 function setUploadCaption(fileName) {
   if (!uploadCaptionNode) {
     return;
@@ -42,11 +53,67 @@ function setUploadCaption(fileName) {
     : "Drag and drop a PDF here, or click to browse from your device.";
 }
 
-function setLoadingState(isLoading) {
+function setLoadingState(isLoading, label = "Uploading PDF...") {
   submitButton?.toggleAttribute("disabled", isLoading);
 
   if (loadingIndicatorNode) {
     loadingIndicatorNode.hidden = !isLoading;
+  }
+
+  if (loadingLabelNode) {
+    loadingLabelNode.textContent = label;
+  }
+}
+
+function setProgress(percent) {
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+
+  if (progressFillNode) {
+    progressFillNode.style.width = `${safePercent}%`;
+  }
+
+  if (progressValueNode) {
+    progressValueNode.textContent = `${safePercent}%`;
+  }
+
+  if (progressTrackNode) {
+    progressTrackNode.setAttribute("aria-valuenow", String(safePercent));
+  }
+}
+
+function setActiveStage(stage) {
+  Object.entries(stageNodes).forEach(([name, node]) => {
+    if (!node) {
+      return;
+    }
+
+    node.classList.remove("stage-pill-active", "stage-pill-done");
+
+    if (name === stage) {
+      node.classList.add("stage-pill-active");
+      return;
+    }
+
+    if (
+      (stage === "processing" && name === "upload") ||
+      (stage === "inference" && (name === "upload" || name === "processing"))
+    ) {
+      node.classList.add("stage-pill-done");
+    }
+  });
+}
+
+function resetPipelineState() {
+  clearInferenceTimer();
+  setProgress(0);
+  setActiveStage(null);
+  setLoadingState(false, "Uploading PDF...");
+}
+
+function clearInferenceTimer() {
+  if (inferenceTimerId !== null) {
+    clearTimeout(inferenceTimerId);
+    inferenceTimerId = null;
   }
 }
 
@@ -73,10 +140,10 @@ function renderTags(tags) {
   });
 }
 
-function renderResult(payload, errorMessage = "") {
-  const classification = payload?.class ?? payload?.expected_response?.class ?? "unknown";
-  const confidence = payload?.confidence ?? payload?.expected_response?.confidence ?? "n/a";
-  const tags = payload?.tags ?? payload?.expected_response?.tags ?? [];
+function renderResult(payload, errorType = "No active error category.", errorMessage = "No errors.") {
+  const classification = payload?.class ?? "unknown";
+  const confidence = payload?.confidence ?? "n/a";
+  const tags = payload?.tags ?? [];
 
   if (resultClassNode) {
     resultClassNode.textContent = String(classification);
@@ -89,16 +156,71 @@ function renderResult(payload, errorMessage = "") {
 
   renderTags(tags);
 
+  if (resultErrorTypeNode) {
+    resultErrorTypeNode.textContent = errorType;
+  }
+
   if (resultErrorNode) {
-    resultErrorNode.textContent = errorMessage || "No errors.";
+    resultErrorNode.textContent = errorMessage;
   }
 }
 
-fileInput?.addEventListener("change", () => {
-  setUploadCaption(fileInput.files?.[0]?.name ?? "");
-});
+function getErrorPresentation(statusCode, payload) {
+  const detail = payload?.detail || "Unexpected API error.";
 
-if (dropZone && fileInput) {
+  if (statusCode === 400) {
+    const validationMessage = payload?.file?.[0] || detail;
+    return {
+      errorType: "Invalid PDF",
+      errorMessage: validationMessage,
+      statusMessage: "The uploaded file was rejected before processing.",
+    };
+  }
+
+  if (statusCode === 422) {
+    return {
+      errorType: "Parsing Error",
+      errorMessage: detail,
+      statusMessage: "PDF parsing completed with no usable text output.",
+    };
+  }
+
+  if (statusCode === 503) {
+    return {
+      errorType: "Ollama Error",
+      errorMessage: detail,
+      statusMessage: "The local model runtime is currently unavailable.",
+    };
+  }
+
+  if (statusCode === 504) {
+    return {
+      errorType: "Timeout Error",
+      errorMessage: detail,
+      statusMessage: "Inference took too long and the request timed out.",
+    };
+  }
+
+  if (statusCode === 502) {
+    return {
+      errorType: "Model Response Error",
+      errorMessage: detail,
+      statusMessage: "The backend received an unusable response from the model.",
+    };
+  }
+
+  return {
+    errorType: "API Error",
+    errorMessage: detail,
+    statusMessage: "The backend returned an unexpected error.",
+  };
+}
+
+function attachDropZoneBehavior() {
+  if (!dropZone || !fileInput) {
+    return;
+  }
+
   ["dragenter", "dragover"].forEach((eventName) => {
     dropZone.addEventListener(eventName, (event) => {
       event.preventDefault();
@@ -131,6 +253,76 @@ if (dropZone && fileInput) {
   });
 }
 
+function classifyDocument(formData) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+
+    request.open("POST", "/api/classify/");
+    request.responseType = "json";
+    request.setRequestHeader("X-CSRFToken", csrfToken);
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+
+      const percent = (event.loaded / event.total) * 100;
+      setActiveStage("upload");
+      setLoadingState(true, "Uploading PDF...");
+      setProgress(percent);
+      statusNode.textContent = `Uploading PDF... ${Math.round(percent)}%`;
+    };
+
+    request.upload.onload = () => {
+      setActiveStage("processing");
+      setLoadingState(true, "Processing PDF...");
+      setProgress(100);
+      statusNode.textContent = "Upload complete. Processing PDF text...";
+
+      clearInferenceTimer();
+      inferenceTimerId = window.setTimeout(() => {
+        setActiveStage("inference");
+        setLoadingState(true, "Running model inference...");
+        statusNode.textContent = "PDF processed. Running local model inference...";
+      }, 350);
+    };
+
+    request.onload = () => {
+      clearInferenceTimer();
+      const payload = request.response ?? safelyParseJson(request.responseText);
+      resolve({ status: request.status, payload });
+    };
+
+    request.onerror = () => {
+      clearInferenceTimer();
+      reject(new Error("Network error while contacting the backend."));
+    };
+
+    request.ontimeout = () => {
+      clearInferenceTimer();
+      reject(new Error("The browser request timed out."));
+    };
+
+    request.send(formData);
+  });
+}
+
+function safelyParseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
+loadBackendStatus();
+resetPipelineState();
+attachDropZoneBehavior();
+
+fileInput?.addEventListener("change", () => {
+  setUploadCaption(fileInput.files?.[0]?.name ?? "");
+});
+
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -139,31 +331,38 @@ form?.addEventListener("submit", async (event) => {
 
   if (!(file instanceof File) || !file.name) {
     statusNode.textContent = "Select a PDF file before submitting.";
+    renderResult({}, "Invalid PDF", "No file was selected.");
     return;
   }
 
-  setLoadingState(true);
-  statusNode.textContent = "Sending the file to the classification API...";
+  renderResult({}, "No active error category.", "No errors.");
+  setActiveStage("upload");
+  setLoadingState(true, "Uploading PDF...");
+  setProgress(0);
 
   try {
-    const response = await fetch("/api/classify/", {
-      method: "POST",
-      body: formData,
-      headers: {
-        "X-CSRFToken": csrfToken,
-      },
-      credentials: "same-origin",
-    });
+    const { status, payload } = await classifyDocument(formData);
 
-    const payload = await response.json();
-    renderResult(payload, response.ok ? "" : payload.detail || "Classification is not ready yet.");
-    statusNode.textContent = response.ok
-      ? "Document processed successfully."
-      : "Backend responded. The classification pipeline is not fully implemented yet.";
+    if (status >= 200 && status < 300) {
+      clearInferenceTimer();
+      setActiveStage("inference");
+      setLoadingState(false, "Uploading PDF...");
+      statusNode.textContent = "Classification completed successfully.";
+      renderResult(payload, "No errors.", "No errors.");
+      return;
+    }
+
+    const { errorType, errorMessage, statusMessage } = getErrorPresentation(status, payload);
+    setLoadingState(false, "Uploading PDF...");
+    statusNode.textContent = statusMessage;
+    renderResult({}, errorType, errorMessage);
   } catch (error) {
+    setLoadingState(false, "Uploading PDF...");
     statusNode.textContent = "Unable to reach the backend.";
-    renderResult({}, error instanceof Error ? error.message : "Unknown error");
-  } finally {
-    setLoadingState(false);
+    renderResult(
+      {},
+      "Connection Error",
+      error instanceof Error ? error.message : "Unknown network error."
+    );
   }
 });

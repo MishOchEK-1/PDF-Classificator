@@ -156,6 +156,73 @@ button:disabled {
   margin: 0;
 }
 
+.pipeline-status {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.progress-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-track {
+  position: relative;
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(31, 42, 42, 0.08);
+}
+
+.progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1d6b52 0%, #2f9e78 100%);
+  transition: width 180ms ease;
+}
+
+.progress-value {
+  min-width: 40px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.stage-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stage-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(31, 42, 42, 0.08);
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.stage-pill-active {
+  background: rgba(29, 107, 82, 0.16);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.stage-pill-done {
+  background: rgba(29, 107, 82, 0.1);
+  color: var(--accent);
+}
+
 .loading-indicator {
   display: inline-flex;
   align-items: center;
@@ -234,6 +301,14 @@ button:disabled {
   margin: 0;
   color: #9f2f2f;
   line-height: 1.55;
+}
+
+.result-error-type {
+  margin: 0 0 8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
 }
 
 @keyframes spin {
