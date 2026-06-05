@@ -2,6 +2,7 @@ import json
 import socket
 from unittest import mock
 import urllib.error
+from pathlib import Path
 
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -28,6 +29,8 @@ from backend.services.classification_service import (
     ClassificationTimeoutAPIError,
     ClassificationUnavailableAPIError,
 )
+from backend.pdf.cleaner import clean_extracted_text
+from backend.pdf.parser import PDFParser
 
 
 def build_pdf_bytes(text: str | None = None) -> bytes:
@@ -124,6 +127,38 @@ class ApiSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn('maximum allowed size', response.json()['file'][0])
+
+    def test_classify_endpoint_translates_unavailable_model_error(self):
+        pdf = SimpleUploadedFile(
+            'sample.pdf',
+            build_pdf_bytes('Model unavailable scenario'),
+            content_type='application/pdf',
+        )
+
+        with mock.patch(
+            'backend.api.views.ClassifyDocumentView.classification_service.classify',
+            side_effect=ClassificationUnavailableAPIError('Ollama is offline'),
+        ):
+            response = self.client.post(reverse('api:classify'), {'file': pdf})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('Ollama is offline', response.json()['detail'])
+
+    def test_classify_endpoint_translates_timeout_error(self):
+        pdf = SimpleUploadedFile(
+            'sample.pdf',
+            build_pdf_bytes('Timeout scenario'),
+            content_type='application/pdf',
+        )
+
+        with mock.patch(
+            'backend.api.views.ClassifyDocumentView.classification_service.classify',
+            side_effect=ClassificationTimeoutAPIError('Timed out'),
+        ):
+            response = self.client.post(reverse('api:classify'), {'file': pdf})
+
+        self.assertEqual(response.status_code, 504)
+        self.assertIn('Timed out', response.json()['detail'])
 
 
 class PromptEngineeringTests(SimpleTestCase):
@@ -361,3 +396,94 @@ class ClassificationServiceTests(SimpleTestCase):
 
         with self.assertRaises(ClassificationResponseAPIError):
             service.classify(mock.sentinel.pdf_file)
+
+    def test_classification_service_supports_all_document_classes(self):
+        for document_class in ALLOWED_DOCUMENT_CLASSES:
+            with self.subTest(document_class=document_class):
+                pdf_processing_service = mock.Mock()
+                pdf_processing_service.process_upload.return_value = mock.Mock(
+                    cleaned_text=f'{document_class} example text',
+                )
+                ollama_client = mock.Mock()
+                ollama_client.classify.return_value = json.dumps(
+                    {
+                        'class': document_class,
+                        'tags': [document_class],
+                        'confidence': 0.9,
+                    }
+                )
+
+                service = ClassificationService(
+                    pdf_processing_service=pdf_processing_service,
+                    ollama_client=ollama_client,
+                )
+
+                result = service.classify(mock.sentinel.pdf_file)
+
+                self.assertEqual(result.document_class, document_class)
+                self.assertEqual(result.tags, [document_class])
+                self.assertEqual(result.confidence, 0.9)
+
+
+class PDFProcessingComponentTests(SimpleTestCase):
+    def test_pdf_parser_extracts_text_from_multi_page_pdf(self):
+        document = fitz.open()
+        document.new_page()
+        document.new_page()
+        document[0].insert_text((72, 72), 'First page heading')
+        document[1].insert_text((72, 72), 'Second page body')
+
+        pdf_path = Path(settings.TEMP_UPLOAD_ROOT) / 'parser-multipage-test.pdf'
+        document.save(pdf_path)
+        document.close()
+
+        try:
+            extracted = PDFParser().extract_text(pdf_path)
+        finally:
+            pdf_path.unlink(missing_ok=True)
+
+        self.assertEqual(extracted.page_count, 2)
+        self.assertIn('First page heading', extracted.text)
+        self.assertIn('Second page body', extracted.text)
+
+    def test_text_cleaner_normalizes_spacing_and_blank_lines(self):
+        raw_text = 'Header   line\r\n\r\n\r\nBody\t\tline\x00\n\nFooter'
+
+        cleaned = clean_extracted_text(raw_text)
+
+        self.assertEqual(cleaned, 'Header line\n\nBody line\n\nFooter')
+
+
+class FrontendSmokeTests(SimpleTestCase):
+    def test_homepage_contains_upload_flow_and_result_sections(self):
+        response = self.client.get(reverse('home'))
+        html = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="classify-form"', html)
+        self.assertIn('id="drop-zone"', html)
+        self.assertIn('id="pipeline-status"', html)
+        self.assertIn('id="result-class"', html)
+        self.assertIn('id="result-tags"', html)
+        self.assertIn('id="result-error"', html)
+
+    def test_frontend_script_contains_loading_and_error_states(self):
+        script = Path(settings.BASE_DIR / 'static/js/app.js').read_text(encoding='utf-8')
+
+        self.assertIn('Uploading PDF...', script)
+        self.assertIn('Processing PDF...', script)
+        self.assertIn('Running model inference...', script)
+        self.assertIn('Invalid PDF', script)
+        self.assertIn('Parsing Error', script)
+        self.assertIn('Ollama Error', script)
+        self.assertIn('Timeout Error', script)
+
+    def test_homepage_includes_progress_and_stage_indicators(self):
+        response = self.client.get(reverse('home'))
+        html = response.content.decode()
+
+        self.assertIn('id="progress-fill"', html)
+        self.assertIn('id="progress-value"', html)
+        self.assertIn('id="stage-upload"', html)
+        self.assertIn('id="stage-processing"', html)
+        self.assertIn('id="stage-inference"', html)
