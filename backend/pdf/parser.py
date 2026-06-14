@@ -4,6 +4,7 @@ from pathlib import Path
 import fitz
 
 from .exceptions import CorruptedPDFError, EmptyPDFError, ScannedPDFError
+from .text_extractor import PDFTextExtractor
 
 
 @dataclass(slots=True)
@@ -14,6 +15,9 @@ class ExtractedPDFDocument:
 
 class PDFParser:
     """Extracts textual content from PDF files using PyMuPDF."""
+
+    def __init__(self, text_extractor: PDFTextExtractor | None = None):
+        self.text_extractor = text_extractor or PDFTextExtractor()
 
     def extract_text(self, pdf_path: str | Path) -> ExtractedPDFDocument:
         path = Path(pdf_path)
@@ -28,8 +32,7 @@ class PDFParser:
             if document.page_count == 0:
                 raise EmptyPDFError('The uploaded PDF does not contain any pages.')
 
-            text_fragments = [page.get_text('text') for page in document]
-            raw_text = '\n'.join(text_fragments)
+            raw_text = self.text_extractor.extract(document)
 
             if not raw_text.strip():
                 raise ScannedPDFError()

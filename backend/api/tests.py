@@ -31,6 +31,8 @@ from backend.services.classification_service import (
 )
 from backend.pdf.cleaner import clean_extracted_text
 from backend.pdf.parser import PDFParser
+from backend.pdf.storage import TemporaryPDFStorage
+from backend.services.pdf_processing_service import PDFProcessingService
 
 
 def build_pdf_bytes(text: str | None = None) -> bytes:
@@ -445,6 +447,35 @@ class PDFProcessingComponentTests(SimpleTestCase):
         self.assertEqual(extracted.page_count, 2)
         self.assertIn('First page heading', extracted.text)
         self.assertIn('Second page body', extracted.text)
+
+    def test_pdf_processing_service_returns_clean_merged_text_stream(self):
+        document = fitz.open()
+
+        first_page = document.new_page()
+        first_page.insert_text((72, 72), 'Invoice Summary', fontsize=18)
+        first_page.insert_text((72, 110), 'Amount due: 1200 USD', fontsize=11)
+
+        second_page = document.new_page()
+        second_page.insert_text((72, 72), 'Payment Terms', fontsize=18)
+        second_page.insert_text((72, 110), 'Pay within 15 days', fontsize=11)
+
+        pdf_bytes = document.tobytes()
+        document.close()
+
+        uploaded_pdf = SimpleUploadedFile(
+            'invoice.pdf',
+            pdf_bytes,
+            content_type='application/pdf',
+        )
+
+        service = PDFProcessingService(storage=TemporaryPDFStorage(settings.TEMP_UPLOAD_ROOT))
+        processed = service.process_upload(uploaded_pdf)
+
+        self.assertEqual(processed.page_count, 2)
+        self.assertEqual(
+            processed.cleaned_text,
+            'Invoice Summary\n\nAmount due: 1200 USD\n\nPayment Terms\n\nPay within 15 days',
+        )
 
     def test_text_cleaner_normalizes_spacing_and_blank_lines(self):
         raw_text = 'Header   line\r\n\r\n\r\nBody\t\tline\x00\n\nFooter'
