@@ -636,6 +636,8 @@ You must:
 - implement chunking;
 - truncate unnecessary text.
 
+Status on 2026-06-14: completed.
+
 ---
 
 ### Task 10.2 — Improve prompt stability

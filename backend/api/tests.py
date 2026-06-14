@@ -32,6 +32,8 @@ from backend.services.classification_service import (
 from backend.pdf.cleaner import clean_extracted_text
 from backend.pdf.parser import PDFParser
 from backend.pdf.storage import TemporaryPDFStorage
+from backend.pdf.text_optimizer import PDFTextOptimizer
+from backend.pdf.parser import ExtractedPDFDocument
 from backend.services.pdf_processing_service import PDFProcessingService
 
 
@@ -476,6 +478,49 @@ class PDFProcessingComponentTests(SimpleTestCase):
             processed.cleaned_text,
             'Invoice Summary\n\nAmount due: 1200 USD\n\nPayment Terms\n\nPay within 15 days',
         )
+
+    def test_text_optimizer_chunks_and_truncates_large_text(self):
+        optimizer = PDFTextOptimizer(chunk_size=40, max_chunks=2, max_characters=70)
+        raw_text = (
+            'Heading One\nLine A\nLine B\n\n'
+            'Heading Two\nLine C\nLine D\n\n'
+            'Heading Three\nLine E\nLine F'
+        )
+
+        optimized = optimizer.optimize(raw_text)
+
+        self.assertLessEqual(len(optimized), 70)
+        self.assertIn('Heading One', optimized)
+        self.assertIn('Heading Two', optimized)
+        self.assertNotIn('Heading Three', optimized)
+
+    def test_pdf_processing_service_limits_large_text_before_prompting(self):
+        stored_path = Path(settings.TEMP_UPLOAD_ROOT) / 'optimizer-test.pdf'
+        uploaded_file = mock.Mock()
+        storage = mock.Mock()
+        storage.save.return_value = mock.Mock(
+            original_name='large.pdf',
+            stored_path=stored_path,
+        )
+        parser = mock.Mock()
+        parser.extract_text.return_value = ExtractedPDFDocument(
+            text='Section 1\nDetail A\n\nSection 2\nDetail B\n\nSection 3\nDetail C',
+            page_count=3,
+        )
+        optimizer = PDFTextOptimizer(chunk_size=24, max_chunks=2, max_characters=40)
+
+        processed = PDFProcessingService(
+            storage=storage,
+            parser=parser,
+            text_optimizer=optimizer,
+        ).process_upload(uploaded_file)
+
+        self.assertEqual(processed.page_count, 3)
+        self.assertLessEqual(len(processed.cleaned_text), 40)
+        self.assertIn('Section 1', processed.cleaned_text)
+        self.assertIn('Section 2', processed.cleaned_text)
+        self.assertNotIn('Section 3', processed.cleaned_text)
+        storage.cleanup_old_files.assert_called_once_with(exclude=stored_path)
 
     def test_text_cleaner_normalizes_spacing_and_blank_lines(self):
         raw_text = 'Header   line\r\n\r\n\r\nBody\t\tline\x00\n\nFooter'

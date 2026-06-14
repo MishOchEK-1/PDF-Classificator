@@ -126,6 +126,9 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(os.getenv('MEDIA_ROOT', BASE_DIR / 'media'))
 TEMP_UPLOAD_ROOT = Path(os.getenv('TEMP_UPLOAD_ROOT', MEDIA_ROOT / 'tmp'))
 MAX_UPLOAD_SIZE = get_int('MAX_UPLOAD_SIZE', 10 * 1024 * 1024)
+PDF_TEXT_CHUNK_SIZE = get_int('PDF_TEXT_CHUNK_SIZE', 4000)
+PDF_TEXT_MAX_CHUNKS = get_int('PDF_TEXT_MAX_CHUNKS', 3)
+PDF_TEXT_MAX_CHARACTERS = get_int('PDF_TEXT_MAX_CHARACTERS', 12000)
 
 MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 TEMP_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
