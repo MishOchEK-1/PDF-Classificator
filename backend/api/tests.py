@@ -3,8 +3,10 @@ import socket
 from unittest import mock
 import urllib.error
 from pathlib import Path
+from io import StringIO
 
 from django.conf import settings
+from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -18,7 +20,11 @@ from backend.llm.ollama_client import (
     OllamaUnavailableError,
 )
 from backend.models.schemas import ClassificationSchema
-from backend.prompts.classification import ALLOWED_DOCUMENT_CLASSES, build_classification_prompt
+from backend.prompts.classification import (
+    ALLOWED_DOCUMENT_CLASSES,
+    CLASSIFICATION_RESPONSE_SCHEMA,
+    build_classification_prompt,
+)
 from backend.prompts.validation import (
     PromptResponseValidationError,
     validate_classification_response,
@@ -170,8 +176,10 @@ class PromptEngineeringTests(SimpleTestCase):
         prompt = build_classification_prompt('Sample invoice text')
 
         self.assertIn('Sample invoice text', prompt)
-        self.assertIn('Return JSON only.', prompt)
+        self.assertIn('Return exactly one JSON object and nothing else.', prompt)
         self.assertIn('Do not include markdown.', prompt)
+        self.assertIn('return "unknown" with lower confidence', prompt)
+        self.assertIn('<document_text>', prompt)
 
         for document_class in ALLOWED_DOCUMENT_CLASSES:
             self.assertIn(document_class, prompt)
@@ -207,6 +215,18 @@ class PromptEngineeringTests(SimpleTestCase):
                 '{"class":"invoice","tags":["Billing!"],"confidence":0.7}'
             )
 
+    def test_response_validation_rejects_extra_keys(self):
+        with self.assertRaises(PromptResponseValidationError):
+            validate_classification_response(
+                '{"class":"invoice","tags":["billing"],"confidence":0.7,"summary":"extra"}'
+            )
+
+    def test_response_validation_rejects_duplicate_tags(self):
+        with self.assertRaises(PromptResponseValidationError):
+            validate_classification_response(
+                '{"class":"invoice","tags":["billing","billing"],"confidence":0.7}'
+            )
+
 
 class OllamaClientTests(SimpleTestCase):
     def test_send_prompt_posts_to_ollama_generate_endpoint(self):
@@ -224,7 +244,11 @@ class OllamaClientTests(SimpleTestCase):
         mocked_context.__exit__.return_value = False
 
         with mock.patch('urllib.request.urlopen', return_value=mocked_context) as urlopen_mock:
-            payload = client.send_prompt('Classify this document')
+            payload = client.send_prompt(
+                'Classify this document',
+                response_schema=CLASSIFICATION_RESPONSE_SCHEMA,
+                options={'temperature': 0},
+            )
 
         request = urlopen_mock.call_args.args[0]
         body = json.loads(request.data.decode('utf-8'))
@@ -233,6 +257,8 @@ class OllamaClientTests(SimpleTestCase):
         self.assertEqual(body['model'], 'gemma3:4b')
         self.assertEqual(body['prompt'], 'Classify this document')
         self.assertFalse(body['stream'])
+        self.assertEqual(body['format'], CLASSIFICATION_RESPONSE_SCHEMA)
+        self.assertEqual(body['options'], {'temperature': 0})
         self.assertEqual(payload['response'], '{"class":"report"}')
 
     def test_parse_response_accepts_generate_api_shape(self):
@@ -354,7 +380,10 @@ class ClassificationServiceTests(SimpleTestCase):
         result = service.classify(mock.sentinel.pdf_file)
 
         pdf_processing_service.process_upload.assert_called_once_with(mock.sentinel.pdf_file)
-        ollama_client.classify.assert_called_once()
+        ollama_client.classify.assert_called_once_with(
+            mock.ANY,
+            response_schema=CLASSIFICATION_RESPONSE_SCHEMA,
+        )
         self.assertEqual(result.document_class, 'invoice')
         self.assertEqual(result.tags, ['billing', 'payment'])
         self.assertEqual(result.confidence, 0.91)
@@ -428,6 +457,24 @@ class ClassificationServiceTests(SimpleTestCase):
                 self.assertEqual(result.tags, [document_class])
                 self.assertEqual(result.confidence, 0.9)
 
+    def test_classification_service_sends_structured_output_schema(self):
+        pdf_processing_service = mock.Mock()
+        pdf_processing_service.process_upload.return_value = mock.Mock(cleaned_text='API design guide')
+        ollama_client = mock.Mock()
+        ollama_client.classify.return_value = (
+            '{"class":"technical_documentation","tags":["api"],"confidence":0.9}'
+        )
+
+        service = ClassificationService(
+            pdf_processing_service=pdf_processing_service,
+            ollama_client=ollama_client,
+        )
+
+        service.classify(mock.sentinel.pdf_file)
+
+        _, kwargs = ollama_client.classify.call_args
+        self.assertEqual(kwargs['response_schema'], CLASSIFICATION_RESPONSE_SCHEMA)
+
 
 class PDFProcessingComponentTests(SimpleTestCase):
     def test_pdf_parser_extracts_text_from_multi_page_pdf(self):
@@ -493,6 +540,13 @@ class PDFProcessingComponentTests(SimpleTestCase):
         self.assertIn('Heading One', optimized)
         self.assertIn('Heading Two', optimized)
         self.assertNotIn('Heading Three', optimized)
+
+    def test_text_optimizer_returns_small_text_without_chunking(self):
+        optimizer = PDFTextOptimizer(chunk_size=100, max_chunks=3, max_characters=120)
+
+        optimized = optimizer.optimize('Short text block')
+
+        self.assertEqual(optimized, 'Short text block')
 
     def test_pdf_processing_service_limits_large_text_before_prompting(self):
         stored_path = Path(settings.TEMP_UPLOAD_ROOT) / 'optimizer-test.pdf'
@@ -563,3 +617,39 @@ class FrontendSmokeTests(SimpleTestCase):
         self.assertIn('id="stage-upload"', html)
         self.assertIn('id="stage-processing"', html)
         self.assertIn('id="stage-inference"', html)
+
+
+class LiveVerificationCommandTests(TestCase):
+    def test_live_verification_command_reports_successful_end_to_end_run(self):
+        stdout = StringIO()
+
+        with mock.patch(
+            'backend.api.views.ClassifyDocumentView.classification_service.classify',
+            return_value=ClassificationSchema(
+                document_class='technical_documentation',
+                tags=['python', 'backend', 'api'],
+                confidence=0.92,
+            ),
+        ):
+            call_command('verify_live_classification', stdout=stdout)
+
+        output = stdout.getvalue()
+
+        self.assertIn('Health check passed', output)
+        self.assertIn('Live classification passed.', output)
+        self.assertIn('"class": "technical_documentation"', output)
+
+    def test_live_verification_command_skips_when_ollama_is_unavailable(self):
+        stdout = StringIO()
+
+        with mock.patch(
+            'backend.api.views.ClassifyDocumentView.classification_service.classify',
+            side_effect=ClassificationUnavailableAPIError('Ollama is offline'),
+        ):
+            call_command('verify_live_classification', stdout=stdout)
+
+        output = stdout.getvalue()
+
+        self.assertIn('Health check passed', output)
+        self.assertIn('Live classification skipped', output)
+        self.assertIn('Ollama is offline', output)

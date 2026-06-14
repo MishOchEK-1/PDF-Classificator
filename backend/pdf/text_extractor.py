@@ -15,23 +15,15 @@ class PDFTextExtractor:
         return '\n\n'.join(page_texts)
 
     def _extract_page_text(self, page: fitz.Page) -> str:
-        page_data = page.get_text('dict', sort=True)
         text_blocks = []
 
-        for block in page_data.get('blocks', []):
-            if block.get('type') != 0:
+        for block in page.get_text('blocks', sort=True):
+            block_type = block[6] if len(block) > 6 else 0
+            if block_type != 0:
                 continue
 
-            lines = []
-
-            for line in block.get('lines', []):
-                spans = line.get('spans', [])
-                line_text = ''.join(span.get('text', '') for span in spans).strip()
-
-                if line_text:
-                    lines.append(line_text)
-
-            if lines:
-                text_blocks.append('\n'.join(lines))
+            block_text = block[4].strip()
+            if block_text:
+                text_blocks.append(block_text)
 
         return '\n\n'.join(text_blocks).strip()

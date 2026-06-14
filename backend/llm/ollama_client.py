@@ -6,6 +6,8 @@ import urllib.request
 
 from django.conf import settings
 
+from backend.prompts.classification import CLASSIFICATION_RESPONSE_SCHEMA
+
 
 class OllamaClientError(RuntimeError):
     """Base exception for Ollama client failures."""
@@ -43,15 +45,28 @@ class OllamaClient:
             if retry_delay_seconds is not None
             else getattr(settings, 'OLLAMA_RETRY_DELAY_SECONDS', 1.0)
         )
+        self.default_response_schema = CLASSIFICATION_RESPONSE_SCHEMA
+        self.default_options = {'temperature': 0}
 
-    def send_prompt(self, prompt: str) -> dict:
-        payload = json.dumps(
-            {
-                'model': self.model,
-                'prompt': prompt,
-                'stream': False,
-            }
-        ).encode('utf-8')
+    def send_prompt(
+        self,
+        prompt: str,
+        response_schema: dict | None = None,
+        options: dict | None = None,
+    ) -> dict:
+        payload_body = {
+            'model': self.model,
+            'prompt': prompt,
+            'stream': False,
+        }
+
+        if response_schema is not None:
+            payload_body['format'] = response_schema
+
+        if options is not None:
+            payload_body['options'] = options
+
+        payload = json.dumps(payload_body, separators=(',', ':')).encode('utf-8')
 
         request = urllib.request.Request(
             f'{self.base_url}/api/generate',
@@ -120,8 +135,12 @@ class OllamaClient:
 
         raise OllamaResponseError('Ollama response does not contain generated text.')
 
-    def classify(self, prompt: str) -> str:
-        response_payload = self.send_prompt(prompt)
+    def classify(self, prompt: str, response_schema: dict | None = None) -> str:
+        response_payload = self.send_prompt(
+            prompt,
+            response_schema=response_schema or self.default_response_schema,
+            options=self.default_options,
+        )
         return self.parse_response(response_payload)
 
     @staticmethod

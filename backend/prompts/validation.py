@@ -3,7 +3,7 @@ import re
 
 from backend.models.schemas import ClassificationSchema
 
-from .classification import ALLOWED_DOCUMENT_CLASSES
+from .classification import ALLOWED_DOCUMENT_CLASSES, CLASSIFICATION_RESPONSE_SCHEMA
 
 TAG_PATTERN = re.compile(r'^[a-z0-9_]+$')
 
@@ -15,6 +15,7 @@ class PromptResponseValidationError(ValueError):
 def validate_classification_response(raw_response: str | dict) -> ClassificationSchema:
     payload = _parse_payload(raw_response)
     _validate_required_fields(payload)
+    _validate_allowed_fields(payload)
 
     document_class = payload['class']
     tags = payload['tags']
@@ -70,11 +71,21 @@ def _validate_required_fields(payload: dict) -> None:
         raise PromptResponseValidationError(f'Model response is missing required fields: {joined}.')
 
 
+def _validate_allowed_fields(payload: dict) -> None:
+    allowed_fields = set(CLASSIFICATION_RESPONSE_SCHEMA['properties'].keys())
+    unexpected_fields = payload.keys() - allowed_fields
+
+    if unexpected_fields:
+        joined = ', '.join(sorted(unexpected_fields))
+        raise PromptResponseValidationError(f'Model response contains unexpected fields: {joined}.')
+
+
 def _validate_and_normalize_tags(tags: object) -> list[str]:
     if not isinstance(tags, list):
         raise PromptResponseValidationError('Tags must be provided as an array.')
 
     normalized_tags = []
+    seen_tags = set()
     for tag in tags:
         if not isinstance(tag, str):
             raise PromptResponseValidationError('Each tag must be a string.')
@@ -88,6 +99,10 @@ def _validate_and_normalize_tags(tags: object) -> list[str]:
                 'Tags must contain only lowercase letters, numbers, and underscores.'
             )
 
+        if normalized_tag in seen_tags:
+            raise PromptResponseValidationError('Tags must not contain duplicates.')
+
+        seen_tags.add(normalized_tag)
         normalized_tags.append(normalized_tag)
 
     return normalized_tags

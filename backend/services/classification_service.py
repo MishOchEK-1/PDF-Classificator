@@ -7,7 +7,7 @@ from backend.llm.ollama_client import (
     OllamaUnavailableError,
 )
 from backend.models.schemas import ClassificationSchema
-from backend.prompts.classification import build_classification_prompt
+from backend.prompts.classification import CLASSIFICATION_RESPONSE_SCHEMA, build_classification_prompt
 from backend.prompts.validation import (
     PromptResponseValidationError,
     validate_classification_response,
@@ -56,7 +56,10 @@ class ClassificationService:
         prompt = build_classification_prompt(processed_document.cleaned_text)
 
         try:
-            raw_response = self.ollama_client.classify(prompt)
+            raw_response = self.ollama_client.classify(
+                prompt,
+                response_schema=CLASSIFICATION_RESPONSE_SCHEMA,
+            )
         except OllamaTimeoutError as exc:
             raise ClassificationTimeoutAPIError(str(exc)) from exc
         except OllamaUnavailableError as exc:

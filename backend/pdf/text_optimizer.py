@@ -19,6 +19,9 @@ class PDFTextOptimizer:
         if not normalized:
             return ''
 
+        if len(normalized) <= min(self.chunk_size, self.max_characters):
+            return normalized
+
         chunks = self.chunk_text(normalized)
         limited_chunks = []
         current_length = 0

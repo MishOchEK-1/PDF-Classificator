@@ -51,3 +51,11 @@ Supported variables:
 5. Extracted text is cleaned and optimized for prompt size.
 6. Prompt is sent to the configured Ollama model.
 7. Model response is validated and returned as API JSON.
+
+## Verification Baseline
+
+- Unit and mocked coverage: see `manage.py test backend.api.tests`
+- Live runtime verification: see [verification-baseline.md](./verification-baseline.md)
+- Persistent live verification command:
+  - `.venv/bin/python manage.py verify_live_classification`
+  - `.venv/bin/python manage.py verify_live_classification --strict`
