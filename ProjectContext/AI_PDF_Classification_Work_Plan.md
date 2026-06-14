@@ -682,12 +682,12 @@ Expected result:
 - local repository state and GitHub repository state are synchronized again.
 
 Repository publication check on 2026-06-14:
-- local branch `main` is ahead of `origin/main` by 4 commits;
-- pending local commits verified:
+- local branch `main` remains ahead of `origin/main`;
+- implementation commits pending publication verified:
   - `45b4f2b` — `Implement PDF-to-text preprocessing`
   - `be55647` — `Optimize large PDF handling`
   - `3a8fee6` — `Synchronize implementation docs`
-  - `9ddf401` — `Record GitHub publication blocker`
+- publication-state bookkeeping commits were created during Task R2 because push remained blocked by authentication;
 - push attempts from the current environment still fail with GitHub HTTPS authentication error:
   - `fatal: could not read Username for 'https://github.com': No such device or address`
 
