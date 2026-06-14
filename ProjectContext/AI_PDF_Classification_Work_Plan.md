@@ -681,7 +681,16 @@ You must:
 Expected result:
 - local repository state and GitHub repository state are synchronized again.
 
-Status: planned.
+Repository publication check on 2026-06-14:
+- local branch `main` is ahead of `origin/main` by 3 commits;
+- pending local commits verified:
+  - `45b4f2b` — `Implement PDF-to-text preprocessing`
+  - `be55647` — `Optimize large PDF handling`
+  - `3a8fee6` — `Synchronize implementation docs`
+- push attempts from the current environment still fail with GitHub HTTPS authentication error:
+  - `fatal: could not read Username for 'https://github.com': No such device or address`
+
+Status on 2026-06-14: blocked by missing GitHub authentication in the current environment.
 
 ---
 
