@@ -232,9 +232,10 @@ class OllamaClientTests(SimpleTestCase):
     def test_send_prompt_posts_to_ollama_generate_endpoint(self):
         client = OllamaClient(
             base_url='http://localhost:11434',
-            model='gemma3:4b',
+            model='gemma4:e2b',
             timeout_seconds=5,
             max_retries=0,
+            keep_alive='5m',
         )
 
         mocked_response = mock.MagicMock()
@@ -254,9 +255,10 @@ class OllamaClientTests(SimpleTestCase):
         body = json.loads(request.data.decode('utf-8'))
 
         self.assertEqual(request.full_url, 'http://localhost:11434/api/generate')
-        self.assertEqual(body['model'], 'gemma3:4b')
+        self.assertEqual(body['model'], 'gemma4:e2b')
         self.assertEqual(body['prompt'], 'Classify this document')
         self.assertFalse(body['stream'])
+        self.assertEqual(body['keep_alive'], '5m')
         self.assertEqual(body['format'], CLASSIFICATION_RESPONSE_SCHEMA)
         self.assertEqual(body['options'], {'temperature': 0})
         self.assertEqual(payload['response'], '{"class":"report"}')
@@ -284,10 +286,11 @@ class OllamaClientTests(SimpleTestCase):
     def test_send_prompt_retries_timeout_then_succeeds(self):
         client = OllamaClient(
             base_url='http://localhost:11434',
-            model='gemma3:4b',
+            model='gemma4:e2b',
             timeout_seconds=1,
             max_retries=1,
             retry_delay_seconds=0,
+            keep_alive='5m',
         )
 
         mocked_response = mock.MagicMock()
@@ -308,10 +311,11 @@ class OllamaClientTests(SimpleTestCase):
     def test_send_prompt_raises_timeout_after_retries(self):
         client = OllamaClient(
             base_url='http://localhost:11434',
-            model='gemma3:4b',
+            model='gemma4:e2b',
             timeout_seconds=1,
             max_retries=1,
             retry_delay_seconds=0,
+            keep_alive='5m',
         )
 
         with mock.patch('urllib.request.urlopen', side_effect=socket.timeout()):
@@ -324,6 +328,7 @@ class OllamaClientTests(SimpleTestCase):
             model='missing-model',
             timeout_seconds=1,
             max_retries=0,
+            keep_alive='5m',
         )
 
         http_error = urllib.error.HTTPError(
@@ -342,9 +347,10 @@ class OllamaClientTests(SimpleTestCase):
     def test_send_prompt_raises_generic_client_error_for_http_500(self):
         client = OllamaClient(
             base_url='http://localhost:11434',
-            model='gemma3:4b',
+            model='gemma4:e2b',
             timeout_seconds=1,
             max_retries=0,
+            keep_alive='5m',
         )
 
         http_error = urllib.error.HTTPError(

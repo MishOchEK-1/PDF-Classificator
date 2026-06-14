@@ -35,6 +35,7 @@ class OllamaClient:
         timeout_seconds: int | None = None,
         max_retries: int | None = None,
         retry_delay_seconds: float | None = None,
+        keep_alive: str | None = None,
     ):
         self.base_url = (base_url or settings.OLLAMA_URL).rstrip('/')
         self.model = model or settings.OLLAMA_MODEL
@@ -45,6 +46,7 @@ class OllamaClient:
             if retry_delay_seconds is not None
             else getattr(settings, 'OLLAMA_RETRY_DELAY_SECONDS', 1.0)
         )
+        self.keep_alive = keep_alive or getattr(settings, 'OLLAMA_KEEP_ALIVE', '5m')
         self.default_response_schema = CLASSIFICATION_RESPONSE_SCHEMA
         self.default_options = {'temperature': 0}
 
@@ -58,6 +60,7 @@ class OllamaClient:
             'model': self.model,
             'prompt': prompt,
             'stream': False,
+            'keep_alive': self.keep_alive,
         }
 
         if response_schema is not None:

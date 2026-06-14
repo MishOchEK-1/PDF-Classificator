@@ -25,6 +25,7 @@ Supported variables:
 - `OLLAMA_TIMEOUT_SECONDS`: request timeout for local inference
 - `OLLAMA_MAX_RETRIES`: retry count for transient local runtime failures
 - `OLLAMA_RETRY_DELAY_SECONDS`: delay between retries
+- `OLLAMA_KEEP_ALIVE`: how long Ollama should keep the model loaded after the last request
 - `MEDIA_ROOT`: root directory for stored media files
 - `TEMP_UPLOAD_ROOT`: temporary directory for uploaded PDFs
 - `MAX_UPLOAD_SIZE`: maximum accepted upload size in bytes
@@ -41,6 +42,7 @@ Supported variables:
 - Extracted text is cleaned before prompting.
 - Large extracted text is reduced before prompting through chunking and truncation.
 - The model never receives raw PDF files directly.
+- Ollama requests set `keep_alive` so the local model can unload itself after the configured idle period.
 
 ## Runtime Flow Summary
 

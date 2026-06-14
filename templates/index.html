@@ -3,88 +3,225 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PDF Classification</title>
+    <title>PDF Classification Console</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
   </head>
   <body>
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
     <main class="shell">
-      <section class="hero">
-        <p class="eyebrow">AI PDF Classification System</p>
-        <h1>Upload a PDF and inspect the classification result locally.</h1>
-        <p class="lead">
-          The UI is intentionally simple: plain HTML, CSS, and JavaScript served
-          by Django.
-        </p>
+      <section class="hero panel panel-hero">
+        <header class="topbar">
+          <div class="brand-mark">
+            <span class="brand-dot" aria-hidden="true"></span>
+            <span>PDF Classificator</span>
+          </div>
+          <a class="ghost-link" href="#workspace">Open Workspace</a>
+        </header>
+
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Local AI PDF Workflow</p>
+            <h1>Transform PDF uploads into clear document classes with your own local model.</h1>
+            <p class="lead">
+              Drop a file, monitor each pipeline stage, and inspect the final
+              classification without leaving this lightweight local dashboard.
+            </p>
+
+            <div class="hero-actions">
+              <a class="button-link" href="#classify-form">Start Classification</a>
+              <p class="hero-note">Private by default. Fast feedback. No external SaaS required.</p>
+            </div>
+
+            <div class="metric-strip" aria-label="Workspace highlights">
+              <article class="metric-card">
+                <p class="metric-value">100%</p>
+                <p class="metric-label">Local runtime</p>
+              </article>
+              <article class="metric-card">
+                <p class="metric-value">3</p>
+                <p class="metric-label">Pipeline stages</p>
+              </article>
+              <article class="metric-card">
+                <p class="metric-value">Live</p>
+                <p class="metric-label">Status feedback</p>
+              </article>
+            </div>
+          </div>
+
+          <div class="hero-preview">
+            <div class="preview-window">
+              <div class="preview-toolbar">
+                <span class="preview-pill preview-pill-brand">Live Console</span>
+                <span class="preview-pill">Ollama</span>
+                <span class="preview-pill">Django API</span>
+              </div>
+
+              <div class="preview-content">
+                <section class="preview-main-card">
+                  <div class="preview-card-header">
+                    <p>Pipeline throughput</p>
+                    <span>real time</span>
+                  </div>
+                  <div class="preview-chart" aria-hidden="true">
+                    <span class="chart-line chart-line-primary"></span>
+                    <span class="chart-line chart-line-secondary"></span>
+                    <span class="chart-dot chart-dot-one"></span>
+                    <span class="chart-dot chart-dot-two"></span>
+                    <span class="chart-dot chart-dot-three"></span>
+                  </div>
+                  <div class="preview-metrics">
+                    <article>
+                      <span>Upload</span>
+                      <strong>Ready</strong>
+                    </article>
+                    <article>
+                      <span>Parsing</span>
+                      <strong>Tracked</strong>
+                    </article>
+                    <article>
+                      <span>Inference</span>
+                      <strong>Local</strong>
+                    </article>
+                  </div>
+                </section>
+
+                <aside class="preview-side-card">
+                  <p class="side-card-label">Current target</p>
+                  <p class="side-card-title">PDF document analysis</p>
+                  <div class="side-card-stat">
+                    <span>Confidence focus</span>
+                    <strong>0.90+</strong>
+                  </div>
+                  <div class="side-card-stat">
+                    <span>Typical labels</span>
+                    <strong>Tech / Legal / Finance</strong>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section class="panel">
-        <form id="classify-form" class="upload-form">
-          {% csrf_token %}
-          <label id="drop-zone" class="upload-field" for="pdf-file">
-            <span class="upload-title">Select a PDF document</span>
-            <span id="upload-caption" class="upload-caption">
-              Drag and drop a PDF here, or click to browse from your device.
-            </span>
-            <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required />
-          </label>
-          <div class="form-actions">
-            <button type="submit">Classify Document</button>
-            <div id="loading-indicator" class="loading-indicator" aria-live="polite" hidden>
-              <span class="loading-spinner" aria-hidden="true"></span>
-              <span id="loading-label">Uploading PDF...</span>
-            </div>
-          </div>
-        </form>
+      <section id="workspace" class="workspace">
+        <div class="section-heading">
+          <p class="section-badge">Workspace</p>
+          <h2>Run classification and inspect the full pipeline from one screen.</h2>
+          <p>
+            The upload console, progress timeline, health checks, and model
+            output stay visible together so you can test the backend like a real user.
+          </p>
+        </div>
 
-        <section id="pipeline-status" class="pipeline-status" aria-live="polite">
-          <div class="progress-row">
-            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <div id="progress-fill" class="progress-fill"></div>
-            </div>
-            <span id="progress-value" class="progress-value">0%</span>
-          </div>
-          <div class="stage-list">
-            <span id="stage-upload" class="stage-pill">Upload</span>
-            <span id="stage-processing" class="stage-pill">Processing</span>
-            <span id="stage-inference" class="stage-pill">Inference</span>
-          </div>
-        </section>
+        <div class="workspace-grid">
+          <section class="panel control-panel">
+            <form id="classify-form" class="upload-form">
+              {% csrf_token %}
+              <label id="drop-zone" class="upload-field" for="pdf-file">
+                <span class="upload-orb" aria-hidden="true"></span>
+                <span class="upload-kicker">Drop PDF</span>
+                <span class="upload-title">Upload a document for local classification</span>
+                <span id="upload-caption" class="upload-caption">
+                  Drag and drop a PDF here, or click to browse from your device.
+                </span>
+                <span class="upload-cta">Choose document</span>
+                <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required />
+              </label>
 
-        <dl class="api-status" aria-live="polite">
-          <div>
-            <dt>Backend</dt>
-            <dd id="backend-status">Checking connection...</dd>
-          </div>
-          <div>
-            <dt>Classification API</dt>
-            <dd id="status">Waiting for a PDF upload.</dd>
-          </div>
-        </dl>
+              <div class="form-actions">
+                <button type="submit">Classify Document</button>
+                <div id="loading-indicator" class="loading-indicator" aria-live="polite" hidden>
+                  <span class="loading-spinner" aria-hidden="true"></span>
+                  <span id="loading-label">Uploading PDF...</span>
+                </div>
+              </div>
+            </form>
 
-        <section class="result-grid" aria-live="polite">
-          <article class="result-card">
-            <p class="result-label">Document Class</p>
-            <p id="result-class" class="result-value">technical_documentation</p>
-          </article>
-          <article class="result-card">
-            <p class="result-label">Confidence</p>
-            <p id="result-confidence" class="result-value">0.92</p>
-          </article>
-          <article class="result-card result-card-wide">
-            <p class="result-label">Tags</p>
-            <div id="result-tags" class="tag-list">
-              <span class="tag-chip">python</span>
-              <span class="tag-chip">backend</span>
-              <span class="tag-chip">api</span>
-            </div>
-          </article>
-          <article class="result-card result-card-wide">
-            <p class="result-label">Errors</p>
-            <p id="result-error-type" class="result-error-type">No active error category.</p>
-            <p id="result-error" class="result-error">No errors yet.</p>
-          </article>
-        </section>
+            <section id="pipeline-status" class="pipeline-status" aria-live="polite">
+              <div class="pipeline-heading">
+                <div>
+                  <p class="panel-label">Pipeline status</p>
+                  <h3>Live execution timeline</h3>
+                </div>
+                <span class="status-chip">Tracked</span>
+              </div>
+
+              <div class="progress-row">
+                <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <span id="progress-value" class="progress-value">0%</span>
+              </div>
+
+              <div class="stage-list">
+                <span id="stage-upload" class="stage-pill">Upload</span>
+                <span id="stage-processing" class="stage-pill">Processing</span>
+                <span id="stage-inference" class="stage-pill">Inference</span>
+              </div>
+            </section>
+
+            <dl class="api-status" aria-live="polite">
+              <div>
+                <dt>Backend</dt>
+                <dd id="backend-status">Checking connection...</dd>
+              </div>
+              <div>
+                <dt>Classification API</dt>
+                <dd id="status">Waiting for a PDF upload.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="result-column">
+            <section class="panel result-panel">
+              <div class="result-panel-heading">
+                <div>
+                  <p class="panel-label">Classification output</p>
+                  <h3>Results and diagnostic details</h3>
+                </div>
+                <span class="status-chip status-chip-accent">Live response</span>
+              </div>
+
+              <section class="result-grid" aria-live="polite">
+                <article class="result-card">
+                  <p class="result-label">Document Class</p>
+                  <p id="result-class" class="result-value">Awaiting input</p>
+                </article>
+                <article class="result-card">
+                  <p class="result-label">Confidence</p>
+                  <p id="result-confidence" class="result-value">n/a</p>
+                </article>
+                <article class="result-card result-card-wide">
+                  <p class="result-label">Tags</p>
+                  <div id="result-tags" class="tag-list">
+                    <span class="tag-chip tag-chip-muted">No tags</span>
+                  </div>
+                </article>
+                <article class="result-card result-card-wide">
+                  <p class="result-label">Errors</p>
+                  <p id="result-error-type" class="result-error-type">No active error category.</p>
+                  <p id="result-error" class="result-error">No errors yet.</p>
+                </article>
+              </section>
+            </section>
+
+            <section class="feature-grid" aria-label="Frontend highlights">
+              <article class="feature-card">
+                <p class="feature-label">Focused upload</p>
+                <h3>Custom drop zone without the browser file-input clutter.</h3>
+                <p>The native file control stays hidden, so only the intended interface is visible.</p>
+              </article>
+              <article class="feature-card">
+                <p class="feature-label">Operational clarity</p>
+                <h3>Progress and backend state stay in view during the entire request.</h3>
+                <p>This helps validate upload, parsing, inference, and failure modes from one page.</p>
+              </article>
+            </section>
+          </section>
+        </div>
       </section>
     </main>
 
