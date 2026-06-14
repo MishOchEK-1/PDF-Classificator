@@ -22,42 +22,50 @@ Provide a modular local-first pipeline for PDF document classification using Dja
 
 - Handles temporary file storage, PDF validation, and text extraction.
 - Produces normalized text for prompt generation.
-- Will be implemented under `backend/pdf/`.
+- Applies pre-prompt text optimization for large PDFs through chunking and truncation.
+- Implemented under `backend/pdf/`.
 
 ### Prompt Layer
 
 - Builds strict JSON-oriented prompts for Gemma 4.
 - Encapsulates allowed document classes and response instructions.
-- Will be implemented under `backend/prompts/`.
+- Implemented under `backend/prompts/`.
 
 ### LLM Layer
 
 - Wraps communication with the local Ollama runtime.
 - Sends prompts to Gemma 4 and returns raw model output.
-- Will be implemented under `backend/llm/`.
+- Handles retries, timeout translation, and unavailable runtime states.
+- Implemented under `backend/llm/`.
 
 ### Service Layer
 
 - Orchestrates the full classification workflow.
 - Coordinates parser, prompt builder, response validation, and API payload assembly.
-- Will be implemented under `backend/services/`.
+- Implemented under `backend/services/`.
 
 ## Request Flow
 
 1. User uploads a PDF from the browser UI rendered by Django.
 2. JavaScript sends `multipart/form-data` to `POST /api/classify/`.
 3. Django API validates the request and stores the file temporarily.
-4. PDF parser extracts and cleans text.
-5. Prompt builder creates a strict JSON-only classification prompt.
-6. Ollama client sends the prompt to local Gemma 4.
-7. Backend validates the model response.
-8. Backend returns normalized JSON to the frontend.
-9. The browser UI displays class, tags, confidence, and any errors.
+4. PDF parser extracts readable text from all pages.
+5. Text cleaner normalizes spacing and line breaks.
+6. Text optimizer limits large extracted text by chunking and truncation.
+7. Prompt builder creates a strict JSON-only classification prompt.
+8. Ollama client sends the prompt to local Gemma through Ollama.
+9. Backend validates the model response against the classification schema.
+10. Backend returns normalized JSON to the frontend.
+11. The browser UI displays class, tags, confidence, progress states, and errors.
 
-## Current Stage 1 Implementation
+## Implemented Components
 
-- Root Django project scaffolded with `manage.py` and `backend/` settings package.
-- Simple browser UI scaffolded with Django templates and static files.
-- API routes reserved for `/api/health/` and `/api/classify/`.
-- Layer directories created for `api`, `services`, `pdf`, `llm`, `prompts`, and shared schemas.
-- Detailed implementation of parsing and inference is intentionally deferred to later stages.
+- Django-served homepage at `/` with upload and result UI.
+- API endpoints at `/api/health/` and `/api/classify/`.
+- Temporary PDF storage with automatic cleanup of expired files.
+- PDF text extraction through PyMuPDF.
+- Structured text cleaning and prompt-ready text optimization.
+- Prompt generation with strict JSON-only instructions.
+- Ollama integration with timeout and retry handling.
+- Response validation for class, tags, and confidence.
+- Synchronous end-to-end classification response flow.

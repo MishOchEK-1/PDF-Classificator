@@ -640,6 +640,65 @@ Status on 2026-06-14: completed.
 
 ---
 
+## Pre-Stage 10.2 — Remediation Plan
+
+## Goal
+
+Remove known project inconsistencies before implementing prompt-stability and performance work.
+
+## Reason for this block
+
+As of 2026-06-14, the codebase implements a working synchronous `/api/classify/` pipeline, but several project sources are out of sync with the actual implementation state.
+
+Known issues to resolve before Stage 10.2:
+- `docs/api-contract.md` still documents a temporary `501 Not Implemented` response for `/api/classify/`;
+- `docs/architecture.md` still describes several implemented layers as future work;
+- `docs/backend-setup.md` does not yet reflect the current extracted-text optimization settings;
+- local git history contains unpushed commits because GitHub authentication is not currently available in the environment;
+- current test coverage is strong at unit/service level, but live verification against a running local Ollama instance is still a separate validation step.
+
+### Task R1 — Synchronize implementation docs
+
+You must:
+- update `docs/api-contract.md` to match the real synchronous classification API;
+- update `docs/architecture.md` to describe the implemented pipeline rather than deferred work;
+- update `docs/backend-setup.md` with the current text-optimization and environment settings.
+
+Expected result:
+- documentation matches the current codebase and no longer describes removed temporary behavior.
+
+Status on 2026-06-14: completed.
+
+---
+
+### Task R2 — Reconcile repository publication state
+
+You must:
+- verify which local commits are ahead of `origin/main`;
+- push pending commits after GitHub authentication is available;
+- record the updated publication state in this work plan.
+
+Expected result:
+- local repository state and GitHub repository state are synchronized again.
+
+Status: planned.
+
+---
+
+### Task R3 — Strengthen pre-optimization verification baseline
+
+You must:
+- define and run a live verification path for `/api/classify/` against a local Ollama runtime when available;
+- document the distinction between mocked/unit coverage and live runtime verification;
+- keep this verification baseline in place before Stage 10.2 and Stage 10.3 changes.
+
+Expected result:
+- prompt-stability and performance work starts from a clearly verified baseline.
+
+Status: planned.
+
+---
+
 ### Task 10.2 — Improve prompt stability
 
 You must:
